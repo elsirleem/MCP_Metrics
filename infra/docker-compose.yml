@@ -1,0 +1,57 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: mcp_password
+      POSTGRES_DB: mcp_metrics
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+
+  mcp:
+    image: ghcr.io/modelcontextprotocol/github-mcp-server:latest
+    restart: unless-stopped
+    environment:
+      GITHUB_PAT: ${GITHUB_PAT}
+    env_file:
+      - ../.env
+    ports:
+      - "3001:3001"
+
+  api:
+    build: ../api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://mcp:mcp_password@db:5432/mcp_metrics
+      MCP_BASE_URL: http://mcp:3001
+      GITHUB_PAT: ${GITHUB_PAT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      INGEST_REPOSITORIES: ${INGEST_REPOSITORIES}
+      INGEST_LOOKBACK_DAYS: ${INGEST_LOOKBACK_DAYS}
+    env_file:
+      - ../.env
+    depends_on:
+      - db
+      - mcp
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  db_data:
