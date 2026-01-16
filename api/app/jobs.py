@@ -9,6 +9,7 @@ from typing import Sequence
 
 from app.dora import compute_dora_from_prs, upsert_dora_metrics
 from app.insights import generate_insight_summary, upsert_daily_insight
+from app.llm import enhance_insight
 from app.mcp_client import MCPClient
 from app.db import init_pool
 
@@ -19,16 +20,26 @@ async def run_daily_ingestion(repositories: Sequence[str], lookback_days: int = 
     since_dt = dt.datetime.utcnow() - dt.timedelta(days=lookback_days)
     since_iso = since_dt.isoformat() + "Z"
 
-    async with pool.acquire() as conn:
-        for repo in repositories:
-            raw_prs = await mcp_client.list_pull_requests(repo=repo, state="closed", since=since_iso)
-            prs = raw_prs if isinstance(raw_prs, list) else raw_prs.get("items", [])
-            metrics_per_day = compute_dora_from_prs(prs)
-            await upsert_dora_metrics(pool, repo, metrics_per_day)
-            if metrics_per_day:
-                latest_day = max(metrics_per_day.keys())
-                insight_text, risk_flags, top_contrib = generate_insight_summary(repo, metrics_per_day, prs, latest_day)
-                await upsert_daily_insight(pool, repo, latest_day, insight_text, risk_flags, top_contrib)
+    try:
+        async with pool.acquire() as conn:
+            for repo in repositories:
+                raw_prs = await mcp_client.list_pull_requests(repo=repo, state="closed", since=since_iso)
+                prs = raw_prs if isinstance(raw_prs, list) else raw_prs.get("items", [])
+                metrics_per_day = compute_dora_from_prs(prs)
+                await upsert_dora_metrics(pool, repo, metrics_per_day)
+                if metrics_per_day:
+                    latest_day = max(metrics_per_day.keys())
+                    insight_text, risk_flags, top_contrib = generate_insight_summary(
+                        repo, metrics_per_day, prs, latest_day
+                    )
+                    llm_insight = await enhance_insight(
+                        repo, str(latest_day), insight_text, metrics_per_day.get(latest_day), top_contrib
+                    )
+                    if llm_insight:
+                        insight_text = llm_insight
+                    await upsert_daily_insight(pool, repo, latest_day, insight_text, risk_flags, top_contrib)
+    finally:
+        await pool.close()
 
 
 def main():

@@ -7,6 +7,7 @@ Foundational scaffold for the system described in the PRD/TechnicalStack documen
 - Next.js (App Router) for dashboard, chat, daily briefings
 - PostgreSQL for metrics + insights storage
 - GitHub MCP server (Docker) as the retrieval layer
+- Optional OpenAI (or API-compatible) model for AI chat + insight generation
 
 ## Quick start (local with Docker)
 1. Copy env template and fill secrets:
@@ -30,11 +31,12 @@ Foundational scaffold for the system described in the PRD/TechnicalStack documen
 - Run the job once: `cd api && INGEST_REPOSITORIES=owner/repo uvicorn app.main:app --reload` for API, or `python -m app.jobs` for the batch job.
 - To schedule daily via cron: `0 2 * * * cd /path/to/api && INGEST_REPOSITORIES=owner/repo python -m app.jobs >> /tmp/mcp_cron.log 2>&1`
 
-## Next steps
-- Implement real MCP client usage in `api/app/mcp_client.py` and wire to ingestion + chat endpoints.
-- Add persistence layer for `dora_metrics` and `daily_insights` tables (see `OtherInfo.md`).
-- Build dashboard + chat UI pages that consume the API.
-- Add cron/worker to run daily ingestion + AI insight generation.
+## Recently added
+- MCP health check surfaced on `/health`.
+- DORA CFR/MTTR heuristics and contributor-risk endpoint.
+- Optional LLM-backed chat and insight summarization (set `OPENAI_API_KEY`).
+- Frontend charts, drilldowns, org view toggle, contributor risk card.
+- CI for backend/frontend and scheduled ingestion workflow templates (`.github/workflows`).
 
 ## Development without Docker
 - API: `cd api && uvicorn app.main:app --reload`

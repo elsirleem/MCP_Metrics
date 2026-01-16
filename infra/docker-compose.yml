@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16-alpine
@@ -15,7 +13,7 @@ services:
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
 
   mcp:
-    image: ghcr.io/modelcontextprotocol/github-mcp-server:latest
+    build: ./mcp
     restart: unless-stopped
     environment:
       GITHUB_PAT: ${GITHUB_PAT}

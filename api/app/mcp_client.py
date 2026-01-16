@@ -16,6 +16,17 @@ class MCPClient:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
+    async def health(self) -> bool:
+        url = f"{self.base_url}/health"
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(url, timeout=10)
+                resp.raise_for_status()
+                data = resp.json()
+                return data.get("status") == "ok"
+        except Exception:
+            return False
+
     async def list_commits(self, repo: str, since: str | None = None) -> Any:
         url = f"{self.base_url}/list_commits"
         payload: dict[str, Any] = {"repo": repo}

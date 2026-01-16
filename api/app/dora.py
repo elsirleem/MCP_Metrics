@@ -18,15 +18,15 @@ def _parse_datetime(value: str | None) -> dt.datetime | None:
 
 
 def compute_dora_from_prs(prs: Iterable[dict[str, Any]]) -> dict[dt.date, dict[str, float]]:
-    """Return per-date DORA aggregates keyed by date.
+    """Return per-date DORA aggregates keyed by date with light heuristics.
 
-    - deployment_frequency: count of merged PRs per calendar date (UTC)
-    - avg_lead_time_minutes: average (merged_at - created_at) for PRs merged that date
-    - change_failure_rate: placeholder 0.0 (can be improved via labels/tests)
-    - mttr_minutes: placeholder 0.0 (requires incident/rollback data)
+    Heuristics (can be refined later):
+    - change_failure_rate: PRs whose title contains "revert"/"rollback" or label contains
+      any of {bug, incident, revert} divided by total merged that day.
+    - mttr_minutes: average lead time of those failure PRs as a proxy for recovery speed.
     """
 
-    per_day: dict[dt.date, dict[str, float]] = {}
+    per_day: dict[dt.date, dict[str, Any]] = {}
     for pr in prs:
         merged_at = _parse_datetime(pr.get("merged_at"))
         created_at = _parse_datetime(pr.get("created_at"))
@@ -36,25 +36,42 @@ def compute_dora_from_prs(prs: Iterable[dict[str, Any]]) -> dict[dt.date, dict[s
         day = merged_at.date()
         lead_minutes = (merged_at - created_at).total_seconds() / 60.0
 
-        if day not in per_day:
-            per_day[day] = {
+        title = (pr.get("title") or "").lower()
+        labels = [l.get("name", "").lower() for l in pr.get("labels", [])]
+        is_failure = any(keyword in title for keyword in ["revert", "rollback"]) or any(
+            k in labels for k in ["bug", "incident", "revert", "rollback"]
+        )
+
+        bucket = per_day.setdefault(
+            day,
+            {
                 "deployment_frequency": 0,
                 "lead_times": [],
-            }
+                "failure_count": 0,
+                "failure_leads": [],
+            },
+        )
 
-        per_day[day]["deployment_frequency"] += 1
-        per_day[day]["lead_times"].append(lead_minutes)
+        bucket["deployment_frequency"] += 1
+        bucket["lead_times"].append(lead_minutes)
+        if is_failure:
+            bucket["failure_count"] += 1
+            bucket["failure_leads"].append(lead_minutes)
 
     # finalize averages
     finalized: dict[dt.date, dict[str, float]] = {}
     for day, vals in per_day.items():
         leads = vals.get("lead_times", [])
         avg_lead = sum(leads) / len(leads) if leads else 0.0
+        failure_count = vals.get("failure_count", 0)
+        deployment_freq = vals.get("deployment_frequency", 0) or 1  # avoid div/0
+        cfr = failure_count / deployment_freq
+        mttr = sum(vals.get("failure_leads", [])) / failure_count if failure_count else 0.0
         finalized[day] = {
             "deployment_frequency": float(vals.get("deployment_frequency", 0)),
             "avg_lead_time_minutes": avg_lead,
-            "change_failure_rate": 0.0,  # TODO: integrate failure signals
-            "mttr_minutes": 0.0,  # TODO: integrate incident/rollback data
+            "change_failure_rate": float(cfr),
+            "mttr_minutes": float(mttr),
         }
     return finalized
 

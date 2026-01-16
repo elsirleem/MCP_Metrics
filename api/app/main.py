@@ -12,6 +12,7 @@ from app.db import init_pool
 from app.dora import compute_dora_from_prs, upsert_dora_metrics
 from app.mcp_client import MCPClient
 from app.insights import generate_insight_summary, upsert_daily_insight
+from app.llm import enhance_insight, summarize_chat
 
 
 mcp_client = MCPClient()
@@ -35,6 +36,7 @@ class HealthResponse(BaseModel):
     status: str
     service: str = "api"
     mcp_url: str | None = None
+    mcp_ok: bool | None = None
 
 
 class IngestRequest(BaseModel):
@@ -67,7 +69,9 @@ async def health(request: Request):
         pool_ok = True
     except Exception:
         pool_ok = False
-    return HealthResponse(status="ok" if pool_ok else "degraded", mcp_url=MCP_BASE_URL)
+    mcp_ok = await mcp_client.health()
+    status = "ok" if pool_ok and mcp_ok else "degraded"
+    return HealthResponse(status=status, mcp_url=MCP_BASE_URL, mcp_ok=mcp_ok)
 
 
 @app.post("/ingest")
@@ -85,6 +89,15 @@ async def ingest(req: IngestRequest, pool=Depends(pool_dep)):
         if metrics_per_day:
             latest_day = max(metrics_per_day.keys())
             insight_text, risk_flags, top_contrib = generate_insight_summary(repo, metrics_per_day, prs, latest_day)
+            llm_insight = await enhance_insight(
+                repo,
+                str(latest_day),
+                insight_text,
+                metrics_per_day.get(latest_day),
+                top_contrib,
+            )
+            if llm_insight:
+                insight_text = llm_insight
             await upsert_daily_insight(pool, repo, latest_day, insight_text, risk_flags, top_contrib)
         results.append({"repo": repo, "days": len(metrics_per_day)})
 
@@ -174,40 +187,44 @@ async def get_contributor_risk(repo: str, lookback_days: int = 30):
 
 @app.get("/insights/daily")
 async def get_daily_insights(repo: str, limit: int = 7, pool=Depends(pool_dep)):
-    # TODO: fetch from Postgres daily_insights table
-        if limit < 1 or limit > 30:
-            raise HTTPException(status_code=400, detail="limit must be between 1 and 30")
+    if limit < 1 or limit > 30:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 30")
 
-        query = """
-        SELECT date, summary_text, risk_flags, top_contributors
-        FROM daily_insights
-        WHERE repo_id = $1
-        ORDER BY date DESC
-        LIMIT $2;
-        """
+    query = """
+    SELECT date, summary_text, risk_flags, top_contributors
+    FROM daily_insights
+    WHERE repo_id = $1
+    ORDER BY date DESC
+    LIMIT $2;
+    """
 
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(query, repo, limit)
-        insights = [dict(row) for row in rows]
-        return {"repo": repo, "insights": insights, "limit": limit}
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(query, repo, limit)
+    insights = [dict(row) for row in rows]
+    return {"repo": repo, "insights": insights, "limit": limit}
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    # TODO: route NL to MCP tools + LLM
-        # Minimal heuristic router: if asks for commits -> list_commits, else pull requests
-        since_dt = dt.datetime.utcnow() - dt.timedelta(days=req.lookback_days)
-        since_iso = since_dt.isoformat() + "Z"
-        if "commit" in req.message.lower():
-            data = await mcp_client.list_commits(req.repo, since=since_iso)
-            items = data if isinstance(data, list) else data.get("items", [])
-            answer = f"Found {len(items)} commits in the last {req.lookback_days} days."
-            return ChatResponse(answer=answer, data_used={"commits": items[:5]}, tool="list_commits")
-        else:
-            data = await mcp_client.list_pull_requests(req.repo, state="closed", since=since_iso)
-            items = data if isinstance(data, list) else data.get("items", [])
-            answer = f"Found {len(items)} PRs closed in the last {req.lookback_days} days."
-            return ChatResponse(answer=answer, data_used={"pull_requests": items[:5]}, tool="list_pull_requests")
+    # Minimal heuristic router: if asks for commits -> list_commits, else pull requests
+    since_dt = dt.datetime.utcnow() - dt.timedelta(days=req.lookback_days)
+    since_iso = since_dt.isoformat() + "Z"
+    tool = "list_commits" if "commit" in req.message.lower() else "list_pull_requests"
+
+    if tool == "list_commits":
+        data = await mcp_client.list_commits(req.repo, since=since_iso)
+    else:
+        data = await mcp_client.list_pull_requests(req.repo, state="closed", since=since_iso)
+
+    items = data if isinstance(data, list) else data.get("items", [])
+    llm_answer = await summarize_chat(req.message, tool, items)
+    if llm_answer:
+        answer = llm_answer
+    else:
+        noun = "commits" if tool == "list_commits" else "PRs"
+        answer = f"Found {len(items)} {noun} in the last {req.lookback_days} days."
+
+    return ChatResponse(answer=answer, data_used={tool: items[:5]}, tool=tool)
 
 
 if __name__ == "__main__":
