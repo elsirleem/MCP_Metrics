@@ -50,6 +50,8 @@ export default function Home() {
   const [riskFlags, setRiskFlags] = useState<string[]>([]);
   const [drilldownDate, setDrilldownDate] = useState<string | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const invalidRepo = !repo.includes("/");
 
   const activeMetrics = orgMode ? orgMetrics : metrics;
 
@@ -63,6 +65,11 @@ export default function Home() {
   }, [activeMetrics]);
 
   async function runIngest() {
+    if (invalidRepo) {
+      setError("Repo must be in owner/repo format");
+      return;
+    }
+    setError(null);
     setLoading(true);
     try {
       await fetch(`${API_BASE}/ingest`, {
@@ -73,6 +80,8 @@ export default function Home() {
       await loadMetrics();
       await loadInsights();
       await loadContributors();
+    } catch (e: any) {
+      setError(e?.message || "Ingestion failed");
     } finally {
       setLoading(false);
     }
@@ -80,29 +89,49 @@ export default function Home() {
 
   async function loadMetrics() {
     if (orgMode) {
-      const res = await fetch(`${API_BASE}/metrics/org?range_days=${lookback}`);
-      const data = await res.json();
-      setOrgMetrics(data.metrics || []);
+      try {
+        const res = await fetch(`${API_BASE}/metrics/org?range_days=${lookback}`);
+        const data = await res.json();
+        setOrgMetrics(data.metrics || []);
+        setError(null);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load org metrics");
+      }
     } else {
-      const res = await fetch(`${API_BASE}/metrics/dora?repo=${encodeURIComponent(repo)}&range_days=${lookback}`);
-      const data = await res.json();
-      setMetrics(data.metrics || []);
+      try {
+        const res = await fetch(`${API_BASE}/metrics/dora?repo=${encodeURIComponent(repo)}&range_days=${lookback}`);
+        const data = await res.json();
+        setMetrics(data.metrics || []);
+        setError(null);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load metrics");
+      }
     }
   }
 
   async function loadInsights() {
-    const res = await fetch(`${API_BASE}/insights/daily?repo=${encodeURIComponent(repo)}&limit=5`);
-    const data = await res.json();
-    setInsights(data.insights || []);
+    try {
+      const res = await fetch(`${API_BASE}/insights/daily?repo=${encodeURIComponent(repo)}&limit=5`);
+      const data = await res.json();
+      setInsights(data.insights || []);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load insights");
+    }
   }
 
   async function loadContributors() {
-    const res = await fetch(
-      `${API_BASE}/metrics/contributors?repo=${encodeURIComponent(repo)}&lookback_days=${lookback}`
-    );
-    const data = await res.json();
-    setContributors(data.authors || []);
-    setRiskFlags(data.risk_flags || []);
+    try {
+      const res = await fetch(
+        `${API_BASE}/metrics/contributors?repo=${encodeURIComponent(repo)}&lookback_days=${lookback}`
+      );
+      const data = await res.json();
+      setContributors(data.authors || []);
+      setRiskFlags(data.risk_flags || []);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load contributors");
+    }
   }
 
   async function sendChat() {
@@ -115,6 +144,7 @@ export default function Home() {
       });
       const data = await res.json();
       setChatAnswer(data.answer || "");
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -122,24 +152,35 @@ export default function Home() {
 
   async function loadDrilldown(date: string) {
     setDrilldownDate(date);
-    const res = await fetch(
-      `${API_BASE}/metrics/dora/drilldown?repo=${encodeURIComponent(repo)}&date=${encodeURIComponent(date)}`
-    );
-    const data = await res.json();
-    setDrilldownItems(data.pull_requests || []);
+    try {
+      const res = await fetch(
+        `${API_BASE}/metrics/dora/drilldown?repo=${encodeURIComponent(repo)}&date=${encodeURIComponent(date)}`
+      );
+      const data = await res.json();
+      setDrilldownItems(data.pull_requests || []);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load pull requests");
+    }
   }
 
   useEffect(() => {
     loadMetrics();
     loadInsights();
     loadContributors();
-      }, [repo, lookback, orgMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo, lookback, orgMode]);
 
       return (
         <main className="pb-16">
           <div className="mx-auto max-w-6xl px-4 space-y-8">
             <section className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 shadow-glass backdrop-blur">
               <div className="flex flex-col gap-4">
+                {error && (
+                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    {error}
+                  </div>
+                )}
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-200">MCP-powered insights</p>
                 <h1 className="text-3xl sm:text-4xl font-bold leading-tight text-white">GitHub Productivity Command Center</h1>
                 <p className="text-slate-200/80 max-w-2xl text-base leading-relaxed">
@@ -149,7 +190,7 @@ export default function Home() {
                   <button
                     className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition hover:shadow-xl"
                     onClick={runIngest}
-                    disabled={loading}
+                    disabled={loading || invalidRepo}
                   >
                     {loading ? "Working..." : "Run ingestion"}
                   </button>

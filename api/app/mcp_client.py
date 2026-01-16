@@ -16,6 +16,16 @@ class MCPClient:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
+    async def _post_json(self, url: str, payload: dict[str, Any], timeout: int = 30) -> Any:
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(url, json=payload, headers=self._headers(), timeout=timeout)
+                resp.raise_for_status()
+                return resp.json()
+        except Exception:
+            # Keep API resilient: callers can detect empty list/dict and fall back.
+            return []
+
     async def health(self) -> bool:
         url = f"{self.base_url}/health"
         try:
@@ -32,27 +42,18 @@ class MCPClient:
         payload: dict[str, Any] = {"repo": repo}
         if since:
             payload["since"] = since
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, headers=self._headers(), timeout=30)
-            resp.raise_for_status()
-            return resp.json()
+        return await self._post_json(url, payload)
 
     async def list_pull_requests(self, repo: str, state: str = "closed", since: str | None = None) -> Any:
         url = f"{self.base_url}/list_pull_requests"
         payload: dict[str, Any] = {"repo": repo, "state": state}
         if since:
             payload["since"] = since
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, headers=self._headers(), timeout=30)
-            resp.raise_for_status()
-            return resp.json()
+        return await self._post_json(url, payload)
 
     async def list_issues(self, repo: str, state: str = "open", since: str | None = None) -> Any:
         url = f"{self.base_url}/list_issues"
         payload: dict[str, Any] = {"repo": repo, "state": state}
         if since:
             payload["since"] = since
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(url, json=payload, headers=self._headers(), timeout=30)
-            resp.raise_for_status()
-            return resp.json()
+        return await self._post_json(url, payload)

@@ -47,5 +47,9 @@ Foundational scaffold for the system described in the PRD/TechnicalStack documen
 - Keep Node versions consistent (e.g., via `nvm use`) to avoid repeated reinstalls.
 - If you develop in Docker, cache or bake `node_modules` to prevent it being wiped on each container start.
 
+### Tests
+- Backend: `cd api && pip install .[dev] && pytest`
+- Frontend: `cd frontend && npm run lint && npm run build`
+
 ## Notes
 - Compose expects Docker to supply the MCP server image `ghcr.io/modelcontextprotocol/github-mcp-server:latest`. Ensure your PAT has repo:read scope for your targets.

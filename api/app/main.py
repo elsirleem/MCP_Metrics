@@ -76,6 +76,9 @@ async def health(request: Request):
 
 @app.post("/ingest")
 async def ingest(req: IngestRequest, pool=Depends(pool_dep)):
+    for repo in req.repositories:
+        if "/" not in repo:
+            raise HTTPException(status_code=400, detail=f"Invalid repo format: {repo}. Expected owner/repo")
     since_dt = dt.datetime.utcnow() - dt.timedelta(days=req.lookback_days)
     since_iso = since_dt.isoformat() + "Z"
 
@@ -106,6 +109,8 @@ async def ingest(req: IngestRequest, pool=Depends(pool_dep)):
 
 @app.get("/metrics/dora")
 async def get_dora_metrics(repo: str, range_days: int = 30, pool=Depends(pool_dep)):
+    if "/" not in repo:
+        raise HTTPException(status_code=400, detail="Invalid repo format; expected owner/repo")
     if range_days < 1 or range_days > 180:
         raise HTTPException(status_code=400, detail="range_days must be between 1 and 180")
 
@@ -148,6 +153,8 @@ async def get_org_metrics(range_days: int = 30, pool=Depends(pool_dep)):
 
 @app.get("/metrics/dora/drilldown")
 async def get_dora_drilldown(repo: str, date: dt.date, pool=Depends(pool_dep)):
+    if "/" not in repo:
+        raise HTTPException(status_code=400, detail="Invalid repo format; expected owner/repo")
     """Return PRs merged on a specific date for contextualization (FR009)."""
     since = dt.datetime.combine(date, dt.time.min).isoformat() + "Z"
     until = dt.datetime.combine(date + dt.timedelta(days=1), dt.time.min).isoformat() + "Z"
@@ -159,6 +166,8 @@ async def get_dora_drilldown(repo: str, date: dt.date, pool=Depends(pool_dep)):
 
 @app.get("/metrics/contributors")
 async def get_contributor_risk(repo: str, lookback_days: int = 30):
+    if "/" not in repo:
+        raise HTTPException(status_code=400, detail="Invalid repo format; expected owner/repo")
     """Aggregate commit counts by author and flag bus factor risk (FR008)."""
     if lookback_days < 1 or lookback_days > 180:
         raise HTTPException(status_code=400, detail="lookback_days must be between 1 and 180")
@@ -187,6 +196,8 @@ async def get_contributor_risk(repo: str, lookback_days: int = 30):
 
 @app.get("/insights/daily")
 async def get_daily_insights(repo: str, limit: int = 7, pool=Depends(pool_dep)):
+    if "/" not in repo:
+        raise HTTPException(status_code=400, detail="Invalid repo format; expected owner/repo")
     if limit < 1 or limit > 30:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 30")
 
@@ -206,6 +217,8 @@ async def get_daily_insights(repo: str, limit: int = 7, pool=Depends(pool_dep)):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
+    if "/" not in req.repo:
+        raise HTTPException(status_code=400, detail="Invalid repo format; expected owner/repo")
     # Minimal heuristic router: if asks for commits -> list_commits, else pull requests
     since_dt = dt.datetime.utcnow() - dt.timedelta(days=req.lookback_days)
     since_iso = since_dt.isoformat() + "Z"
