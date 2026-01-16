@@ -42,5 +42,10 @@ Foundational scaffold for the system described in the PRD/TechnicalStack documen
 - API: `cd api && uvicorn app.main:app --reload`
 - Frontend: `cd frontend && npm install && npm run dev`
 
+### Frontend dev tips
+- You only need `npm install` when `package.json` / lockfile changes or on a fresh clone. Otherwise go straight to `npm run dev`.
+- Keep Node versions consistent (e.g., via `nvm use`) to avoid repeated reinstalls.
+- If you develop in Docker, cache or bake `node_modules` to prevent it being wiped on each container start.
+
 ## Notes
 - Compose expects Docker to supply the MCP server image `ghcr.io/modelcontextprotocol/github-mcp-server:latest`. Ensure your PAT has repo:read scope for your targets.
