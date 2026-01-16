@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.db import init_pool
@@ -26,6 +27,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="GitHub MCP Productivity Engine", version="0.1.0", lifespan=lifespan)
+
+# Allow frontend to call API from browser (localhost:3000 or container network).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 
 async def pool_dep(request: Request):
