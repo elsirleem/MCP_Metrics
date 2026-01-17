@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY pyproject.toml /app/
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir fastapi uvicorn[standard] httpx pydantic asyncpg python-dotenv
+    pip install --no-cache-dir fastapi uvicorn[standard] httpx pydantic asyncpg python-dotenv openai
 
 COPY app /app/app
 

@@ -11,22 +11,27 @@ app.use((req, _res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-const TOKEN = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || '';
+const DEFAULT_TOKEN = process.env.GITHUB_PAT || process.env.GITHUB_TOKEN || '';
 
-function ghClient() {
+/**
+ * Create a GitHub API client. Accepts an optional token override from the request.
+ * If token is provided in the request, use it; otherwise fall back to env token.
+ */
+function ghClient(tokenOverride) {
+  const token = tokenOverride || DEFAULT_TOKEN;
   const headers = {
     'User-Agent': 'mcp-metrics-proxy',
     'Accept': 'application/vnd.github+json',
   };
-  if (TOKEN) headers['Authorization'] = `Bearer ${TOKEN}`;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   return axios.create({ baseURL: 'https://api.github.com', headers, timeout: 30000 });
 }
 
 app.post('/list_commits', async (req, res) => {
-  const { repo, since, until } = req.body || {};
+  const { repo, since, until, token } = req.body || {};
   if (!repo) return res.status(400).json({ error: 'repo is required' });
   try {
-    const client = ghClient();
+    const client = ghClient(token);
     const resp = await client.get(`/repos/${repo}/commits`, { params: { since, until, per_page: 100 } });
     res.json(resp.data);
   } catch (err) {
@@ -36,12 +41,12 @@ app.post('/list_commits', async (req, res) => {
 });
 
 app.post('/list_pull_requests', async (req, res) => {
-  const { repo, state = 'closed', since } = req.body || {};
+  const { repo, state = 'closed', since, token } = req.body || {};
   if (!repo) return res.status(400).json({ error: 'repo is required' });
   try {
-    const client = ghClient();
+    const client = ghClient(token);
     const params = { state, per_page: 100, sort: 'updated', direction: 'desc' };
-    if (since) params['since'] = since; // GitHub API uses "since" for issues; for PRs we filter client-side
+    if (since) params['since'] = since;
     const resp = await client.get(`/repos/${repo}/pulls`, { params });
     let items = resp.data;
     if (since) {
@@ -55,10 +60,10 @@ app.post('/list_pull_requests', async (req, res) => {
 });
 
 app.post('/list_issues', async (req, res) => {
-  const { repo, state = 'open', since } = req.body || {};
+  const { repo, state = 'open', since, token } = req.body || {};
   if (!repo) return res.status(400).json({ error: 'repo is required' });
   try {
-    const client = ghClient();
+    const client = ghClient(token);
     const resp = await client.get(`/repos/${repo}/issues`, { params: { state, since, per_page: 100 } });
     res.json(resp.data);
   } catch (err) {
@@ -68,7 +73,7 @@ app.post('/list_issues', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', transport: 'http', auth: !!TOKEN });
+  res.json({ status: 'ok', transport: 'http', auth: !!DEFAULT_TOKEN });
 });
 
 app.listen(PORT, () => {

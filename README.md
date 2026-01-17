@@ -54,11 +54,23 @@ Troubleshooting
 - To schedule daily via cron: `0 2 * * * cd /path/to/api && INGEST_REPOSITORIES=owner/repo python -m app.jobs >> /tmp/mcp_cron.log 2>&1`
 
 ## Recently added
+- **Dashboard-configurable GitHub PAT**: Enter your PAT directly in the UI to analyze any repository without restarting services.
+- **Enhanced AI Chat**: Ask questions about DORA metrics, MCP concepts, or your repository's performance. Works with or without OpenAI API key:
+  - With OpenAI: Full conversational AI with context about your metrics and GitHub data
+  - Without OpenAI: Intelligent fallback responses for common DORA/MCP questions
 - MCP health check surfaced on `/health`.
 - DORA CFR/MTTR heuristics and contributor-risk endpoint.
-- Optional LLM-backed chat and insight summarization (set `OPENAI_API_KEY`).
 - Frontend charts, drilldowns, org view toggle, contributor risk card.
 - CI for backend/frontend and scheduled ingestion workflow templates (`.github/workflows`).
+
+## Chat Features
+The chat can answer questions about:
+- **DORA Metrics**: "What are DORA metrics?", "Explain lead time", "What is a good deployment frequency?"
+- **MCP Concepts**: "What is MCP?", "How does the Model Context Protocol work?"
+- **Your Repository**: "What shipped last week?", "Who are the top contributors?", "How is my repo doing?"
+- **Risk Analysis**: "What are the risk flags?", "Is there bus factor risk?"
+
+For the best experience, configure `OPENAI_API_KEY` in your `.env` file. The system will provide helpful fallback responses even without it.
 
 ## Development without Docker
 - API: `cd api && uvicorn app.main:app --reload`

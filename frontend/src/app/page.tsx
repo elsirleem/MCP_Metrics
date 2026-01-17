@@ -36,6 +36,24 @@ type Contributor = {
   commit_count: number;
 };
 
+type PerformanceLevel = {
+  deployment_frequency: string;
+  lead_time: string;
+  change_failure_rate: string;
+  mttr: string;
+  overall: string;
+};
+
+type BusinessCorrelation = {
+  status: string;
+  correlations: Record<string, number | null>;
+  insights: Array<{
+    type: string;
+    insight: string;
+    recommendation: string;
+  }>;
+};
+
 export default function Home() {
   const [repo, setRepo] = useState("elsirleem/SE4IoT_project");
   const [lookback, setLookback] = useState(7);
@@ -51,7 +69,13 @@ export default function Home() {
   const [drilldownDate, setDrilldownDate] = useState<string | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [githubPat, setGithubPat] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [performanceLevel, setPerformanceLevel] = useState<PerformanceLevel | null>(null);
+  const [businessCorrelations, setBusinessCorrelations] = useState<BusinessCorrelation | null>(null);
+  const [showBusinessPanel, setShowBusinessPanel] = useState(false);
   const invalidRepo = !repo.includes("/");
+  const safeLookback = Math.max(1, Number(lookback) || 1);
 
   const activeMetrics = orgMode ? orgMetrics : metrics;
 
@@ -75,7 +99,11 @@ export default function Home() {
       await fetch(`${API_BASE}/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repositories: [repo], lookback_days: lookback }),
+        body: JSON.stringify({ 
+          repositories: [repo], 
+          lookback_days: safeLookback,
+          github_pat: githubPat || undefined 
+        }),
       });
       await loadMetrics();
       await loadInsights();
@@ -88,9 +116,10 @@ export default function Home() {
   }
 
   async function loadMetrics() {
+    const patParam = githubPat ? `&github_pat=${encodeURIComponent(githubPat)}` : "";
     if (orgMode) {
       try {
-        const res = await fetch(`${API_BASE}/metrics/org?range_days=${lookback}`);
+        const res = await fetch(`${API_BASE}/metrics/org?range_days=${safeLookback}`);
         const data = await res.json();
         setOrgMetrics(data.metrics || []);
         setError(null);
@@ -99,7 +128,7 @@ export default function Home() {
       }
     } else {
       try {
-        const res = await fetch(`${API_BASE}/metrics/dora?repo=${encodeURIComponent(repo)}&range_days=${lookback}`);
+        const res = await fetch(`${API_BASE}/metrics/dora?repo=${encodeURIComponent(repo)}&range_days=${safeLookback}`);
         const data = await res.json();
         setMetrics(data.metrics || []);
         setError(null);
@@ -122,8 +151,9 @@ export default function Home() {
 
   async function loadContributors() {
     try {
+      const patParam = githubPat ? `&github_pat=${encodeURIComponent(githubPat)}` : "";
       const res = await fetch(
-        `${API_BASE}/metrics/contributors?repo=${encodeURIComponent(repo)}&lookback_days=${lookback}`
+        `${API_BASE}/metrics/contributors?repo=${encodeURIComponent(repo)}&lookback_days=${safeLookback}${patParam}`
       );
       const data = await res.json();
       setContributors(data.authors || []);
@@ -135,16 +165,37 @@ export default function Home() {
   }
 
   async function sendChat() {
+    if (invalidRepo) {
+      setError("Repo must be in owner/repo format");
+      return;
+    }
+    if (!chatMsg.trim()) {
+      setError("Ask a question before sending");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo, message: chatMsg, lookback_days: lookback }),
+        body: JSON.stringify({ 
+          repo, 
+          message: chatMsg.trim(), 
+          lookback_days: safeLookback,
+          github_pat: githubPat || undefined 
+        }),
       });
       const data = await res.json();
+      if (!res.ok) {
+        const detail = (data && (data.detail || data.message)) || "Chat failed";
+        setError(typeof detail === "string" ? detail : JSON.stringify(detail));
+        setChatAnswer("");
+        return;
+      }
       setChatAnswer(data.answer || "");
       setError(null);
+    } catch (e: any) {
+      setError(e?.message || "Chat failed");
     } finally {
       setLoading(false);
     }
@@ -153,8 +204,9 @@ export default function Home() {
   async function loadDrilldown(date: string) {
     setDrilldownDate(date);
     try {
+      const patParam = githubPat ? `&github_pat=${encodeURIComponent(githubPat)}` : "";
       const res = await fetch(
-        `${API_BASE}/metrics/dora/drilldown?repo=${encodeURIComponent(repo)}&date=${encodeURIComponent(date)}`
+        `${API_BASE}/metrics/dora/drilldown?repo=${encodeURIComponent(repo)}&date=${encodeURIComponent(date)}${patParam}`
       );
       const data = await res.json();
       setDrilldownItems(data.pull_requests || []);
@@ -164,8 +216,36 @@ export default function Home() {
     }
   }
 
+  async function loadPerformanceLevel() {
+    try {
+      const repoParam = repo ? `repo=${encodeURIComponent(repo)}&` : "";
+      const res = await fetch(
+        `${API_BASE}/business/performance-level?${repoParam}range_days=${safeLookback}`
+      );
+      const data = await res.json();
+      if (data.performance_levels) {
+        setPerformanceLevel(data.performance_levels);
+      }
+    } catch (e: any) {
+      console.error("Failed to load performance level:", e);
+    }
+  }
+
+  async function loadBusinessCorrelations() {
+    try {
+      const res = await fetch(
+        `${API_BASE}/business/correlations?org_id=default&range_days=90`
+      );
+      const data = await res.json();
+      setBusinessCorrelations(data);
+    } catch (e: any) {
+      console.error("Failed to load business correlations:", e);
+    }
+  }
+
   useEffect(() => {
     loadMetrics();
+    loadPerformanceLevel();
     loadInsights();
     loadContributors();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,7 +262,7 @@ export default function Home() {
                   </div>
                 )}
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-200">MCP-powered insights</p>
-                <h1 className="text-3xl sm:text-4xl font-bold leading-tight text-white">GitHub Productivity Command Center</h1>
+                <h1 className="text-3xl sm:text-4xl font-bold leading-tight text-white">Technical Metrics Observation Dashboard</h1>
                 <p className="text-slate-200/80 max-w-2xl text-base leading-relaxed">
                   Ingest GitHub via MCP, compute DORA, surface risks, and chat with your repos—all in one teal-forward workspace.
                 </p>
@@ -200,7 +280,42 @@ export default function Home() {
                   >
                     Refresh metrics
                   </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:border-brand-400/60 hover:text-white"
+                    onClick={() => setShowSettings(!showSettings)}
+                  >
+                    ⚙️ Settings
+                  </button>
                 </div>
+                
+                {/* Settings Panel */}
+                {showSettings && (
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-white">GitHub Configuration</h4>
+                      <button
+                        className="text-xs text-slate-400 hover:text-white"
+                        onClick={() => setShowSettings(false)}
+                      >
+                        ✕ Close
+                      </button>
+                    </div>
+                    <label className="flex flex-col gap-2 text-sm text-slate-200/80">
+                      GitHub Personal Access Token (PAT)
+                      <input
+                        type="password"
+                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                        value={githubPat}
+                        onChange={(e) => setGithubPat(e.target.value)}
+                        placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                      />
+                      <span className="text-xs text-slate-400">
+                        Enter your GitHub PAT to access private repos or increase rate limits. 
+                        {githubPat ? " ✓ Token configured" : " Leave empty to use server default."}
+                      </span>
+                    </label>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
                     Deployments: {totals.deployments}
@@ -208,9 +323,165 @@ export default function Home() {
                   <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
                     Avg lead (m): {totals.avgLead.toFixed(1)}
                   </span>
+                  {performanceLevel && (
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      performanceLevel.overall === "Elite" ? "bg-emerald-500/20 text-emerald-100 border border-emerald-500/30" :
+                      performanceLevel.overall === "High" ? "bg-blue-500/20 text-blue-100 border border-blue-500/30" :
+                      performanceLevel.overall === "Medium" ? "bg-yellow-500/20 text-yellow-100 border border-yellow-500/30" :
+                      "bg-red-500/20 text-red-100 border border-red-500/30"
+                    }`}>
+                      {performanceLevel.overall} Performer
+                    </span>
+                  )}
                 </div>
               </div>
             </section>
+
+            {/* Performance Level & Business Impact Section */}
+            {performanceLevel && (
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-glass backdrop-blur">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Business Impact</p>
+                    <h3 className="text-xl font-semibold text-white">DORA Performance Levels</h3>
+                  </div>
+                  <button
+                    className="text-sm text-brand-200 hover:text-brand-100"
+                    onClick={() => setShowBusinessPanel(!showBusinessPanel)}
+                  >
+                    {showBusinessPanel ? "Hide Details" : "Show Details"}
+                  </button>
+                </div>
+                
+                <div className="grid gap-4 md:grid-cols-4">
+                  {[
+                    { key: "deployment_frequency", label: "Deploy Frequency", icon: "🚀" },
+                    { key: "lead_time", label: "Lead Time", icon: "⏱️" },
+                    { key: "change_failure_rate", label: "Failure Rate", icon: "🛡️" },
+                    { key: "mttr", label: "Recovery Time", icon: "🔧" },
+                  ].map(({ key, label, icon }) => {
+                    const level = performanceLevel[key as keyof PerformanceLevel];
+                    return (
+                      <div key={key} className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+                        <div className="text-2xl mb-1">{icon}</div>
+                        <div className="text-xs text-slate-400 mb-1">{label}</div>
+                        <div className={`text-sm font-semibold ${
+                          level === "Elite" ? "text-emerald-400" :
+                          level === "High" ? "text-blue-400" :
+                          level === "Medium" ? "text-yellow-400" :
+                          "text-red-400"
+                        }`}>
+                          {level}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {showBusinessPanel && (
+                  <div className="mt-4 space-y-4">
+                    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                      <h4 className="text-sm font-semibold text-white mb-3">What This Means for Your Business</h4>
+                      <div className="space-y-2 text-sm text-slate-300">
+                        {performanceLevel.overall === "Elite" && (
+                          <>
+                            <p>✅ <strong>Elite teams</strong> deploy 973x more frequently than low performers</p>
+                            <p>✅ Your engineering velocity directly enables faster time-to-market</p>
+                            <p>✅ Lower incident rates mean higher customer satisfaction</p>
+                          </>
+                        )}
+                        {performanceLevel.overall === "High" && (
+                          <>
+                            <p>📈 <strong>High performers</strong> are well-positioned for growth</p>
+                            <p>📈 Focus on reducing lead time to reach elite status</p>
+                            <p>📈 Consider investing in deployment automation</p>
+                          </>
+                        )}
+                        {performanceLevel.overall === "Medium" && (
+                          <>
+                            <p>⚠️ <strong>Medium performers</strong> have room for significant improvement</p>
+                            <p>⚠️ Slower delivery may impact competitive advantage</p>
+                            <p>⚠️ Higher failure rates increase operational costs</p>
+                          </>
+                        )}
+                        {performanceLevel.overall === "Low" && (
+                          <>
+                            <p>🚨 <strong>Low performers</strong> face significant business risks</p>
+                            <p>🚨 Slow delivery cycles hurt time-to-market</p>
+                            <p>🚨 High failure rates impact customer trust and revenue</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                      <h4 className="text-sm font-semibold text-white mb-3">DORA Research Benchmarks</h4>
+                      <div className="overflow-auto">
+                        <table className="w-full text-xs text-slate-300">
+                          <thead>
+                            <tr className="text-left text-slate-400">
+                              <th className="pb-2">Metric</th>
+                              <th className="pb-2">Elite</th>
+                              <th className="pb-2">High</th>
+                              <th className="pb-2">Medium</th>
+                              <th className="pb-2">Low</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="py-1">Deploy Frequency</td>
+                              <td className="text-emerald-400">Multiple/day</td>
+                              <td className="text-blue-400">Daily-Weekly</td>
+                              <td className="text-yellow-400">Weekly-Monthly</td>
+                              <td className="text-red-400">&lt; Monthly</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1">Lead Time</td>
+                              <td className="text-emerald-400">&lt; 1 hour</td>
+                              <td className="text-blue-400">&lt; 1 day</td>
+                              <td className="text-yellow-400">&lt; 1 week</td>
+                              <td className="text-red-400">&gt; 1 week</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1">Failure Rate</td>
+                              <td className="text-emerald-400">0-15%</td>
+                              <td className="text-blue-400">16-30%</td>
+                              <td className="text-yellow-400">31-45%</td>
+                              <td className="text-red-400">&gt; 45%</td>
+                            </tr>
+                            <tr>
+                              <td className="py-1">Recovery Time</td>
+                              <td className="text-emerald-400">&lt; 1 hour</td>
+                              <td className="text-blue-400">&lt; 1 day</td>
+                              <td className="text-yellow-400">&lt; 1 week</td>
+                              <td className="text-red-400">&gt; 1 week</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {businessCorrelations && businessCorrelations.insights && businessCorrelations.insights.length > 0 && (
+                      <div className="rounded-xl border border-white/10 bg-slate-900/40 p-4">
+                        <h4 className="text-sm font-semibold text-white mb-3">Business Correlation Insights</h4>
+                        <div className="space-y-2">
+                          {businessCorrelations.insights.map((insight, i) => (
+                            <div key={i} className={`rounded-lg p-3 ${
+                              insight.type === "positive" ? "bg-emerald-500/10 border border-emerald-500/30" :
+                              insight.type === "warning" ? "bg-yellow-500/10 border border-yellow-500/30" :
+                              "bg-slate-500/10 border border-slate-500/30"
+                            }`}>
+                              <p className="text-sm text-white">{insight.insight}</p>
+                              <p className="text-xs text-slate-400 mt-1">💡 {insight.recommendation}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
 
             <section className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2 space-y-4">
