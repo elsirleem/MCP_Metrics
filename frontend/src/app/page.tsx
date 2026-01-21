@@ -60,8 +60,9 @@ export default function Home() {
   const [metrics, setMetrics] = useState<DoraMetric[]>([]);
   const [orgMetrics, setOrgMetrics] = useState<OrgMetric[]>([]);
   const [insights, setInsights] = useState<Insight[]>([]);
-  const [chatMsg, setChatMsg] = useState("What shipped?");
+  const [chatMsg, setChatMsg] = useState("");
   const [chatAnswer, setChatAnswer] = useState<string>("");
+  const [chatHistory, setChatHistory] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
   const [loading, setLoading] = useState(false);
   const [orgMode, setOrgMode] = useState(false);
   const [contributors, setContributors] = useState<Contributor[]>([]);
@@ -74,6 +75,7 @@ export default function Home() {
   const [performanceLevel, setPerformanceLevel] = useState<PerformanceLevel | null>(null);
   const [businessCorrelations, setBusinessCorrelations] = useState<BusinessCorrelation | null>(null);
   const [showBusinessPanel, setShowBusinessPanel] = useState(false);
+  const [showChatPanel, setShowChatPanel] = useState(false);
   const invalidRepo = !repo.includes("/");
   const safeLookback = Math.max(1, Number(lookback) || 1);
 
@@ -198,9 +200,11 @@ export default function Home() {
       return;
     }
     if (!chatMsg.trim()) {
-      setError("Ask a question before sending");
       return;
     }
+    const userMessage = chatMsg.trim();
+    setChatMsg("");
+    setChatHistory(prev => [...prev, { role: "user", content: userMessage }]);
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/chat`, {
@@ -208,7 +212,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           repo, 
-          message: chatMsg.trim(), 
+          message: userMessage, 
           lookback_days: safeLookback,
           github_pat: githubPat || undefined 
         }),
@@ -216,14 +220,16 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok) {
         const detail = (data && (data.detail || data.message)) || "Chat failed";
-        setError(typeof detail === "string" ? detail : JSON.stringify(detail));
-        setChatAnswer("");
+        const errorMsg = typeof detail === "string" ? detail : JSON.stringify(detail);
+        setChatHistory(prev => [...prev, { role: "assistant", content: `Error: ${errorMsg}` }]);
         return;
       }
-      setChatAnswer(data.answer || "");
+      const answer = data.answer || "No response received.";
+      setChatAnswer(answer);
+      setChatHistory(prev => [...prev, { role: "assistant", content: answer }]);
       setError(null);
     } catch (e: any) {
-      setError(e?.message || "Chat failed");
+      setChatHistory(prev => [...prev, { role: "assistant", content: `Error: ${e?.message || "Chat failed"}` }]);
     } finally {
       setLoading(false);
     }
@@ -674,166 +680,139 @@ export default function Home() {
               </section>
             )}
 
-            <section className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2 space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-glass backdrop-blur">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex flex-wrap justify-between gap-2">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Ingest & Metrics</p>
-                        <h3 className="text-xl font-semibold text-white">Track delivery in real time</h3>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      <label className="flex flex-col gap-2 text-sm text-slate-200/80">
-                        Repository (owner/repo)
-                        <input
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
-                          value={repo}
-                          onChange={(e) => setRepo(e.target.value)}
-                        />
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-200/80">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-white/30 bg-white/10 text-brand-500 focus:ring-brand-500"
-                          checked={orgMode}
-                          onChange={(e) => setOrgMode(e.target.checked)}
-                        />
-                        Organization view (aggregate all repos)
-                      </label>
-                      <label className="flex flex-col gap-2 text-sm text-slate-200/80">
-                        Lookback days
-                        <input
-                          type="number"
-                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
-                          value={lookback}
-                          onChange={(e) => setLookback(Number(e.target.value))}
-                          min={1}
-                          max={90}
-                        />
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-3 pt-1">
-                      <button
-                        className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition hover:shadow-xl disabled:opacity-60"
-                        onClick={runIngest}
-                        disabled={loading}
-                      >
-                        {loading ? "Working..." : "Run ingestion"}
-                      </button>
-                      <button
-                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:border-brand-400/60 hover:text-white"
-                        onClick={loadInsights}
-                      >
-                        Refresh insights
-                      </button>
-                    </div>
+            {/* Ingest & Metrics Section - Full Width */}
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-5 shadow-glass backdrop-blur">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Ingest & Metrics</p>
+                    <h3 className="text-xl font-semibold text-white">Track delivery in real time</h3>
                   </div>
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
-                    <div className="mb-2 text-sm font-semibold text-white/90">Deployments & Lead Time</div>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={activeMetrics} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                          <XAxis dataKey="date" hide />
-                          <YAxis stroke="#94a3b8" />
-                          <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1f2937" }} />
-                          <Line type="monotone" dataKey="deployment_frequency" stroke="#14b8a6" strokeWidth={2} name="Deployments" />
-                          <Line type="monotone" dataKey="avg_lead_time_minutes" stroke="#22c55e" strokeWidth={2} name="Lead (m)" />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
-                    <div className="mb-2 text-sm font-semibold text-white/90">Stability</div>
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={activeMetrics} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                          <XAxis dataKey="date" hide />
-                          <YAxis stroke="#94a3b8" />
-                          <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1f2937" }} />
-                          <Bar dataKey="change_failure_rate" fill="#f97316" name="CFR" radius={[8, 8, 0, 0]} />
-                          <Bar dataKey="mttr_minutes" fill="#ef4444" name="MTTR (m)" radius={[8, 8, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Metrics table</p>
-                      <h3 className="text-lg font-semibold text-white">Daily rollup</h3>
-                    </div>
-                  </div>
-                  <div className="overflow-auto rounded-xl border border-white/10 bg-slate-900/40">
-                    <table className="min-w-full text-sm text-slate-100/90">
-                      <thead className="bg-white/5 text-left text-xs uppercase text-slate-300">
-                        <tr>
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Deployments</th>
-                          <th className="px-3 py-2">Lead Time (m)</th>
-                          <th className="px-3 py-2">CFR</th>
-                          <th className="px-3 py-2">MTTR (m)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeMetrics.map((m) => (
-                          <tr
-                            key={m.date}
-                            className="border-t border-white/5 transition hover:bg-white/5 cursor-pointer"
-                            onClick={() => loadDrilldown(m.date)}
-                          >
-                            <td className="px-3 py-2">{m.date}</td>
-                            <td className="px-3 py-2 text-center">{m.deployment_frequency}</td>
-                            <td className="px-3 py-2 text-center">{m.avg_lead_time_minutes.toFixed(1)}</td>
-                            <td className="px-3 py-2 text-center">{m.change_failure_rate.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-center">{m.mttr_minutes.toFixed(1)}</td>
-                          </tr>
-                        ))}
-                        {!activeMetrics.length && (
-                          <tr>
-                            <td className="px-3 py-3 text-center text-slate-400" colSpan={5}>
-                              No metrics yet.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                <div className="grid gap-3 md:grid-cols-4">
+                  <label className="flex flex-col gap-2 text-sm text-slate-200/80">
+                    Repository (owner/repo)
+                    <input
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={repo}
+                      onChange={(e) => setRepo(e.target.value)}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm text-slate-200/80">
+                    Lookback days
+                    <input
+                      type="number"
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+                      value={lookback}
+                      onChange={(e) => setLookback(Number(e.target.value))}
+                      min={1}
+                      max={90}
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-200/80 pt-6">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-white/30 bg-white/10 text-brand-500 focus:ring-brand-500"
+                      checked={orgMode}
+                      onChange={(e) => setOrgMode(e.target.checked)}
+                    />
+                    Organization view
+                  </label>
+                  <div className="flex items-end gap-2">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition hover:shadow-xl disabled:opacity-60"
+                      onClick={runIngest}
+                      disabled={loading}
+                    >
+                      {loading ? "Working..." : "Run ingestion"}
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:border-brand-400/60 hover:text-white"
+                      onClick={loadInsights}
+                    >
+                      Refresh
+                    </button>
                   </div>
                 </div>
               </div>
+            </section>
 
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
-                  <div className="mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Chat</p>
-                    <h3 className="text-lg font-semibold text-white">Ask your repo</h3>
-                  </div>
-                  <textarea
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
-                    rows={5}
-                    value={chatMsg}
-                    onChange={(e) => setChatMsg(e.target.value)}
-                    placeholder="What shipped last week?"
-                  />
-                  <button
-                    className="mt-2 w-full rounded-xl bg-gradient-to-r from-brand-500 to-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/40 transition hover:shadow-xl disabled:opacity-60"
-                    onClick={sendChat}
-                    disabled={loading}
-                  >
-                    {loading ? "Sending..." : "Send"}
-                  </button>
-                  <p className="mt-3 text-sm text-slate-300 whitespace-pre-wrap">
-                    {chatAnswer || "Response will appear here."}
-                  </p>
+            {/* Charts Section - Full Width */}
+            <section className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
+                <div className="mb-2 text-sm font-semibold text-white/90">Deployments & Lead Time</div>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={activeMetrics} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="date" hide />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1f2937" }} />
+                      <Line type="monotone" dataKey="deployment_frequency" stroke="#14b8a6" strokeWidth={2} name="Deployments" />
+                      <Line type="monotone" dataKey="avg_lead_time_minutes" stroke="#22c55e" strokeWidth={2} name="Lead (m)" />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
+                <div className="mb-2 text-sm font-semibold text-white/90">Stability (CFR & MTTR)</div>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={activeMetrics} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="date" hide />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #1f2937" }} />
+                      <Bar dataKey="change_failure_rate" fill="#f97316" name="CFR" radius={[8, 8, 0, 0]} />
+                      <Bar dataKey="mttr_minutes" fill="#ef4444" name="MTTR (m)" radius={[8, 8, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </section>
+
+            {/* Metrics Table - Full Width */}
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-4 shadow-glass backdrop-blur">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Metrics table</p>
+                  <h3 className="text-lg font-semibold text-white">Daily rollup</h3>
+                </div>
+              </div>
+              <div className="overflow-auto rounded-xl border border-white/10 bg-slate-900/40">
+                <table className="min-w-full text-sm text-slate-100/90">
+                  <thead className="bg-white/5 text-left text-xs uppercase text-slate-300">
+                    <tr>
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Deployments</th>
+                      <th className="px-3 py-2">Lead Time (m)</th>
+                      <th className="px-3 py-2">CFR</th>
+                      <th className="px-3 py-2">MTTR (m)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeMetrics.map((m) => (
+                      <tr
+                        key={m.date}
+                        className="border-t border-white/5 transition hover:bg-white/5 cursor-pointer"
+                        onClick={() => loadDrilldown(m.date)}
+                      >
+                        <td className="px-3 py-2">{m.date}</td>
+                        <td className="px-3 py-2 text-center">{m.deployment_frequency}</td>
+                        <td className="px-3 py-2 text-center">{m.avg_lead_time_minutes.toFixed(1)}</td>
+                        <td className="px-3 py-2 text-center">{m.change_failure_rate.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-center">{m.mttr_minutes.toFixed(1)}</td>
+                      </tr>
+                    ))}
+                    {!activeMetrics.length && (
+                      <tr>
+                        <td className="px-3 py-3 text-center text-slate-400" colSpan={5}>
+                          No metrics yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </section>
 
@@ -894,6 +873,135 @@ export default function Home() {
               </div>
             </section>
           </div>
+
+          {/* Floating Chat Bubble */}
+          <button
+            onClick={() => setShowChatPanel(!showChatPanel)}
+            className={`fixed bottom-6 right-6 z-30 flex h-14 w-14 items-center justify-center rounded-full shadow-2xl transition-all duration-300 hover:scale-110 ${
+              showChatPanel 
+                ? "bg-slate-700 rotate-0" 
+                : "bg-gradient-to-br from-brand-500 to-emerald-500 animate-pulse hover:animate-none"
+            }`}
+            title="Chat with your repo"
+          >
+            {showChatPanel ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Chat Panel */}
+          {showChatPanel && (
+            <div className="fixed bottom-24 right-6 z-30 w-96 max-w-[calc(100vw-3rem)] rounded-2xl border border-white/10 bg-slate-900/95 shadow-2xl backdrop-blur-xl overflow-hidden animate-in slide-in-from-bottom-4 duration-300">
+              {/* Chat Header */}
+              <div className="bg-gradient-to-r from-brand-500 to-emerald-500 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">Repo Assistant</h3>
+                      <p className="text-xs text-white/70">Ask about DORA metrics & your repo</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowChatPanel(false)}
+                    className="rounded-lg p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Messages */}
+              <div className="h-80 overflow-y-auto p-4 space-y-3">
+                {chatHistory.length === 0 && (
+                  <div className="text-center py-8">
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand-500/20 mb-3">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-brand-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-sm text-slate-400 mb-2">How can I help you today?</p>
+                    <div className="space-y-2">
+                      {["What shipped last week?", "Explain my DORA metrics", "Who are the top contributors?"].map((q) => (
+                        <button
+                          key={q}
+                          onClick={() => { setChatMsg(q); }}
+                          className="block w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-300 transition hover:border-brand-400/40 hover:bg-brand-500/10"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {chatHistory.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                        msg.role === "user"
+                          ? "bg-gradient-to-r from-brand-500 to-emerald-500 text-white rounded-br-md"
+                          : "bg-white/10 text-slate-200 rounded-bl-md"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+                ))}
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="bg-white/10 rounded-2xl rounded-bl-md px-4 py-3">
+                      <div className="flex gap-1">
+                        <span className="h-2 w-2 rounded-full bg-brand-400 animate-bounce" style={{ animationDelay: "0ms" }}></span>
+                        <span className="h-2 w-2 rounded-full bg-brand-400 animate-bounce" style={{ animationDelay: "150ms" }}></span>
+                        <span className="h-2 w-2 rounded-full bg-brand-400 animate-bounce" style={{ animationDelay: "300ms" }}></span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input */}
+              <div className="border-t border-white/10 p-3">
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-slate-400/80 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                    value={chatMsg}
+                    onChange={(e) => setChatMsg(e.target.value)}
+                    placeholder="Ask a question..."
+                    onKeyDown={(e) => e.key === "Enter" && !loading && sendChat()}
+                    disabled={loading}
+                  />
+                  <button
+                    className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-brand-500 to-emerald-500 text-white shadow-lg transition hover:shadow-xl disabled:opacity-50"
+                    onClick={sendChat}
+                    disabled={loading || !chatMsg.trim()}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  Repo: {repo || "Not set"} • {safeLookback} day lookback
+                </p>
+              </div>
+            </div>
+          )}
 
           {drilldownDate && (
             <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 px-3 py-6" onClick={() => setDrilldownDate(null)}>
