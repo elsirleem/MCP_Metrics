@@ -79,14 +79,42 @@ export default function Home() {
 
   const activeMetrics = orgMode ? orgMetrics : metrics;
 
-  const totals = useMemo(() => {
-    const dep = activeMetrics.reduce((s, m) => s + (m.deployment_frequency || 0), 0);
-    const lead = activeMetrics.reduce((s, m) => s + (m.avg_lead_time_minutes || 0), 0);
+  // Calculate all four DORA metrics
+  const doraStats = useMemo(() => {
+    if (activeMetrics.length === 0) {
+      return {
+        deploymentFrequency: 0,
+        avgLeadTime: 0,
+        changeFailureRate: 0,
+        mttr: 0,
+        totalDeployments: 0,
+        daysWithData: 0,
+      };
+    }
+
+    const totalDeployments = activeMetrics.reduce((s, m) => s + (m.deployment_frequency || 0), 0);
+    const avgLeadTime = activeMetrics.reduce((s, m) => s + (m.avg_lead_time_minutes || 0), 0) / activeMetrics.length;
+    const avgCfr = activeMetrics.reduce((s, m) => s + (m.change_failure_rate || 0), 0) / activeMetrics.length;
+    const avgMttr = activeMetrics.reduce((s, m) => s + (m.mttr_minutes || 0), 0) / activeMetrics.length;
+    
+    // Deployment frequency as deploys per day
+    const deploymentFrequency = totalDeployments / activeMetrics.length;
+
     return {
-      deployments: dep,
-      avgLead: activeMetrics.length ? lead / activeMetrics.length : 0,
+      deploymentFrequency,
+      avgLeadTime,
+      changeFailureRate: avgCfr,
+      mttr: avgMttr,
+      totalDeployments,
+      daysWithData: activeMetrics.length,
     };
   }, [activeMetrics]);
+
+  // Keep legacy totals for backward compatibility
+  const totals = useMemo(() => ({
+    deployments: doraStats.totalDeployments,
+    avgLead: doraStats.avgLeadTime,
+  }), [doraStats]);
 
   async function runIngest() {
     if (invalidRepo) {
@@ -316,25 +344,188 @@ export default function Home() {
                     </label>
                   </div>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-                    Deployments: {totals.deployments}
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-                    Avg lead (m): {totals.avgLead.toFixed(1)}
-                  </span>
-                  {performanceLevel && (
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      performanceLevel.overall === "Elite" ? "bg-emerald-500/20 text-emerald-100 border border-emerald-500/30" :
-                      performanceLevel.overall === "High" ? "bg-blue-500/20 text-blue-100 border border-blue-500/30" :
-                      performanceLevel.overall === "Medium" ? "bg-yellow-500/20 text-yellow-100 border border-yellow-500/30" :
-                      "bg-red-500/20 text-red-100 border border-red-500/30"
-                    }`}>
-                      {performanceLevel.overall} Performer
+              </div>
+            </section>
+
+            {/* DORA Metrics Cards - All Four Key Metrics */}
+            <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-glass backdrop-blur">
+              <div className="mb-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-200">Key Performance Indicators</p>
+                <h2 className="text-2xl font-bold text-white">DORA Metrics</h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  {doraStats.daysWithData > 0 
+                    ? `Based on ${doraStats.daysWithData} days of data (${doraStats.totalDeployments} total deployments)`
+                    : "Run ingestion to collect metrics"
+                  }
+                </p>
+              </div>
+              
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {/* Deployment Frequency */}
+                <div className="rounded-xl border border-white/10 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20 text-xl">
+                      🚀
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-emerald-300/80 uppercase tracking-wide">Deployment Frequency</p>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-white">
+                      {doraStats.deploymentFrequency.toFixed(1)}
                     </span>
+                    <span className="text-sm text-slate-400">deploys/day</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    Total: {doraStats.totalDeployments} deployments
+                  </div>
+                  {performanceLevel && (
+                    <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      performanceLevel.deployment_frequency === "Elite" ? "bg-emerald-500/20 text-emerald-300" :
+                      performanceLevel.deployment_frequency === "High" ? "bg-blue-500/20 text-blue-300" :
+                      performanceLevel.deployment_frequency === "Medium" ? "bg-yellow-500/20 text-yellow-300" :
+                      "bg-red-500/20 text-red-300"
+                    }`}>
+                      {performanceLevel.deployment_frequency}
+                    </div>
+                  )}
+                </div>
+
+                {/* Lead Time for Changes */}
+                <div className="rounded-xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-blue-600/5 p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 text-xl">
+                      ⏱️
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-blue-300/80 uppercase tracking-wide">Lead Time for Changes</p>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-white">
+                      {doraStats.avgLeadTime < 60 
+                        ? doraStats.avgLeadTime.toFixed(0) 
+                        : (doraStats.avgLeadTime / 60).toFixed(1)
+                      }
+                    </span>
+                    <span className="text-sm text-slate-400">
+                      {doraStats.avgLeadTime < 60 ? "minutes" : "hours"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    From commit to production
+                  </div>
+                  {performanceLevel && (
+                    <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      performanceLevel.lead_time === "Elite" ? "bg-emerald-500/20 text-emerald-300" :
+                      performanceLevel.lead_time === "High" ? "bg-blue-500/20 text-blue-300" :
+                      performanceLevel.lead_time === "Medium" ? "bg-yellow-500/20 text-yellow-300" :
+                      "bg-red-500/20 text-red-300"
+                    }`}>
+                      {performanceLevel.lead_time}
+                    </div>
+                  )}
+                </div>
+
+                {/* Change Failure Rate */}
+                <div className="rounded-xl border border-white/10 bg-gradient-to-br from-amber-500/10 to-amber-600/5 p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20 text-xl">
+                      🛡️
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-amber-300/80 uppercase tracking-wide">Change Failure Rate</p>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-white">
+                      {(doraStats.changeFailureRate * 100).toFixed(1)}
+                    </span>
+                    <span className="text-sm text-slate-400">%</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    Deployments causing failures
+                  </div>
+                  {performanceLevel && (
+                    <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      performanceLevel.change_failure_rate === "Elite" ? "bg-emerald-500/20 text-emerald-300" :
+                      performanceLevel.change_failure_rate === "High" ? "bg-blue-500/20 text-blue-300" :
+                      performanceLevel.change_failure_rate === "Medium" ? "bg-yellow-500/20 text-yellow-300" :
+                      "bg-red-500/20 text-red-300"
+                    }`}>
+                      {performanceLevel.change_failure_rate}
+                    </div>
+                  )}
+                </div>
+
+                {/* Mean Time to Restore */}
+                <div className="rounded-xl border border-white/10 bg-gradient-to-br from-purple-500/10 to-purple-600/5 p-5">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/20 text-xl">
+                      🔧
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-purple-300/80 uppercase tracking-wide">Mean Time to Restore</p>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold text-white">
+                      {doraStats.mttr < 60 
+                        ? doraStats.mttr.toFixed(0) 
+                        : doraStats.mttr < 1440
+                          ? (doraStats.mttr / 60).toFixed(1)
+                          : (doraStats.mttr / 1440).toFixed(1)
+                      }
+                    </span>
+                    <span className="text-sm text-slate-400">
+                      {doraStats.mttr < 60 ? "minutes" : doraStats.mttr < 1440 ? "hours" : "days"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    Recovery from incidents
+                  </div>
+                  {performanceLevel && (
+                    <div className={`mt-3 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                      performanceLevel.mttr === "Elite" ? "bg-emerald-500/20 text-emerald-300" :
+                      performanceLevel.mttr === "High" ? "bg-blue-500/20 text-blue-300" :
+                      performanceLevel.mttr === "Medium" ? "bg-yellow-500/20 text-yellow-300" :
+                      "bg-red-500/20 text-red-300"
+                    }`}>
+                      {performanceLevel.mttr}
+                    </div>
                   )}
                 </div>
               </div>
+
+              {/* Overall Performance Badge */}
+              {performanceLevel && (
+                <div className="mt-6 flex items-center justify-center">
+                  <div className={`inline-flex items-center gap-3 rounded-full px-6 py-3 ${
+                    performanceLevel.overall === "Elite" ? "bg-emerald-500/20 border border-emerald-500/30" :
+                    performanceLevel.overall === "High" ? "bg-blue-500/20 border border-blue-500/30" :
+                    performanceLevel.overall === "Medium" ? "bg-yellow-500/20 border border-yellow-500/30" :
+                    "bg-red-500/20 border border-red-500/30"
+                  }`}>
+                    <span className="text-2xl">
+                      {performanceLevel.overall === "Elite" ? "🏆" :
+                       performanceLevel.overall === "High" ? "⭐" :
+                       performanceLevel.overall === "Medium" ? "📈" : "🎯"}
+                    </span>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wide">Overall Performance</p>
+                      <p className={`text-lg font-bold ${
+                        performanceLevel.overall === "Elite" ? "text-emerald-300" :
+                        performanceLevel.overall === "High" ? "text-blue-300" :
+                        performanceLevel.overall === "Medium" ? "text-yellow-300" :
+                        "text-red-300"
+                      }`}>
+                        {performanceLevel.overall} Performer
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Performance Level & Business Impact Section */}
