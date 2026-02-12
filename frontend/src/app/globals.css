@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 body {
-	@apply min-h-screen bg-gradient-to-br from-brand-950 via-slate-950 to-slate-900 text-slate-50 antialiased;
+	@apply min-h-screen text-white antialiased;
+	background-color: #0e1822;
 	font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 

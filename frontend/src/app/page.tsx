@@ -370,8 +370,16 @@ export default function Home() {
                 {/* Deployment Frequency */}
                 <div className="rounded-xl border border-white/10 bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-5">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20 text-xl">
-                      🚀
+                    <div className="flex h-11 w-11 items-center justify-center">
+                      {/* Rocket launching with flame trail */}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 4C24 4 32 12 32 24C32 32 28 38 24 42C20 38 16 32 16 24C16 12 24 4 24 4Z" fill="#10b981" stroke="#10b981" strokeWidth="2"/>
+                        <ellipse cx="24" cy="20" rx="4" ry="5" fill="#0e1822"/>
+                        <path d="M20 42L24 48L28 42" fill="#f59e0b"/>
+                        <path d="M18 42L24 52L30 42" fill="#ef4444" opacity="0.7"/>
+                        <path d="M12 28C12 28 14 24 16 24" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M36 28C36 28 34 24 32 24" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/>
+                      </svg>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-emerald-300/80 uppercase tracking-wide">Deployment Frequency</p>
@@ -401,8 +409,19 @@ export default function Home() {
                 {/* Lead Time for Changes */}
                 <div className="rounded-xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-blue-600/5 p-5">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 text-xl">
-                      ⏱️
+                    <div className="flex h-11 w-11 items-center justify-center">
+                      {/* Speedometer / fast clock icon */}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 48 48" fill="none">
+                        <circle cx="24" cy="24" r="18" stroke="#3b82f6" strokeWidth="3" fill="none"/>
+                        <circle cx="24" cy="24" r="14" stroke="#3b82f6" strokeWidth="1.5" fill="none" opacity="0.5"/>
+                        <path d="M24 10V14" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M24 34V38" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M10 24H14" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M34 24H38" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round"/>
+                        <path d="M24 24L32 16" stroke="#60a5fa" strokeWidth="3" strokeLinecap="round"/>
+                        <circle cx="24" cy="24" r="3" fill="#3b82f6"/>
+                        <path d="M16 36L14 40M32 36L34 40" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" opacity="0.6"/>
+                      </svg>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-blue-300/80 uppercase tracking-wide">Lead Time for Changes</p>
@@ -437,8 +456,15 @@ export default function Home() {
                 {/* Change Failure Rate */}
                 <div className="rounded-xl border border-white/10 bg-gradient-to-br from-amber-500/10 to-amber-600/5 p-5">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20 text-xl">
-                      🛡️
+                    <div className="flex h-11 w-11 items-center justify-center">
+                      {/* Shield with X / broken shield icon */}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" viewBox="0 0 48 48" fill="none">
+                        <path d="M24 4L8 10V22C8 33 15 40 24 44C33 40 40 33 40 22V10L24 4Z" fill="#f59e0b" fillOpacity="0.2" stroke="#f59e0b" strokeWidth="2.5"/>
+                        <path d="M18 18L30 30" stroke="#ef4444" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M30 18L18 30" stroke="#ef4444" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M24 4L24 10" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" opacity="0.6"/>
+                        <circle cx="24" cy="24" r="2" fill="#f59e0b"/>
+                      </svg>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-amber-300/80 uppercase tracking-wide">Change Failure Rate</p>
@@ -468,8 +494,25 @@ export default function Home() {
                 {/* Mean Time to Restore */}
                 <div className="rounded-xl border border-white/10 bg-gradient-to-br from-purple-500/10 to-purple-600/5 p-5">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/20 text-xl">
-                      🔧
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/30 to-purple-600/20">
+                      {/* Recovery wrench with circular arrow icon */}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none">
+                        <defs>
+                          <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#a855f7"/>
+                            <stop offset="100%" stopColor="#7c3aed"/>
+                          </linearGradient>
+                        </defs>
+                        {/* Circular recovery arrow */}
+                        <path d="M12 4C7.58 4 4 7.58 4 12c0 1.95.7 3.74 1.86 5.13" stroke="url(#purpleGrad)" strokeWidth="2" strokeLinecap="round" fill="none"/>
+                        <path d="M4 12l2 2.5 2.5-2" stroke="url(#purpleGrad)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                        {/* Wrench tool */}
+                        <path d="M14.5 9.5L19 14l-1.5 1.5L13 11" stroke="url(#purpleGrad)" strokeWidth="1.5" strokeLinecap="round"/>
+                        <circle cx="11" cy="13" r="3" stroke="url(#purpleGrad)" strokeWidth="1.5" fill="none"/>
+                        <path d="M13 15l2.5 2.5" stroke="url(#purpleGrad)" strokeWidth="1.5" strokeLinecap="round"/>
+                        {/* Gear teeth accents */}
+                        <circle cx="11" cy="13" r="1" fill="url(#purpleGrad)"/>
+                      </svg>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-purple-300/80 uppercase tracking-wide">Mean Time to Restore</p>
