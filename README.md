@@ -1,4 +1,4 @@
-# GitHub MCP Productivity Engine
+# GitHub Engineering Productivity Dashboard
 
 Foundational scaffold for the system described in the PRD/TechnicalStack documents. Includes a FastAPI orchestrator, Next.js frontend, Postgres, and the GitHub MCP server via Docker Compose.
 
